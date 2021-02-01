@@ -9,8 +9,7 @@ loss: 0.0057 - acc: 0.9982 - val_loss: 0.0212 - val_acc: 0.9948
            1       1.00      0.98      0.99       400
 
     accuracy                           0.99       800
-   macro avg       0.99      0.99      0.99       800
-weighted avg       0.99      0.99      0.99       800
+
 
 
 
@@ -26,8 +25,7 @@ loss: 0.0640 - acc: 0.9783 - val_loss: 0.1619 - val_acc: 0.9515
            4       0.68      0.93      0.78       400
 
     accuracy                           0.85      2000
-   macro avg       0.88      0.85      0.86      2000
-weighted avg       0.88      0.85      0.86      2000
+
 
 
 
