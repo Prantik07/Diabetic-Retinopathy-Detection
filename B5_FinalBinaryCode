@@ -1,0 +1,129 @@
+# **EfficientNetB5** *tuned5.0*
+
+# Model Parameters
+IMG_WIDTH = 456
+IMG_HEIGHT = 456
+CHANNELS = 3
+INPUT_SHAPE = (IMG_WIDTH, IMG_HEIGHT, CHANNELS)
+BATCH_SIZE = 4
+
+data_path = '/content/drive/My Drive/Rubix/11.APTOS_BIN_TRAIN.zip (Unzipped Files)/pre1'
+
+# Creating the Training & validation Data
+from keras.preprocessing.image import ImageDataGenerator
+
+
+datagen = ImageDataGenerator(rescale=1 / 128.,
+                            validation_split = 0.15)
+
+
+train_generator = datagen.flow_from_directory(data_path,
+                                              target_size = (IMG_WIDTH, IMG_HEIGHT),
+                                              batch_size = BATCH_SIZE,
+                                              class_mode = 'binary',
+                                              subset = 'training', 
+                                              shuffle = True)
+
+val_generator = datagen.flow_from_directory(data_path,
+                                            target_size =(IMG_WIDTH, IMG_HEIGHT),
+                                            batch_size = BATCH_SIZE,
+                                            class_mode = 'binary', 
+                                            subset = 'validation',
+                                            shuffle = False)
+
+# Defining the Model architecture
+from tensorflow.keras.applications import EfficientNetB5
+from keras.layers import GlobalAveragePooling2D, Dense, Dropout, LeakyReLU
+from keras.activations import elu
+from keras.optimizers import Adam
+from keras.models import Sequential
+
+model = Sequential()
+effnet = EfficientNetB5(weights='imagenet',
+                        include_top=False,
+                        input_shape=(IMG_WIDTH, IMG_HEIGHT, CHANNELS))
+
+model.add(effnet)
+model.add(Dropout(0.25))
+model.add(Dense(2048))
+model.add(LeakyReLU())
+model.add(Dense(1024))
+model.add(LeakyReLU())
+model.add(Dense(512))
+model.add(LeakyReLU())
+model.add(Dense(256))
+model.add(LeakyReLU())
+model.add(GlobalAveragePooling2D())
+model.add(Dropout(0.5))
+model.add(Dense(1, activation='sigmoid'))
+
+model.compile(loss='binary_crossentropy',
+              optimizer=Adam(lr=0.00005), 
+              metrics=['acc'])
+
+
+# ModelSummary
+model.summary()
+
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+es = EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience=12)
+mc = ModelCheckpoint('/content/drive/My Drive/Data11.h5', monitor='val_loss', save_best_only = True, verbose=1)
+rlr = ReduceLROnPlateau(monitor='val_loss', 
+                        factor=0.5, 
+                        patience=4, 
+                        verbose=1, 
+                        mode='auto', 
+                        epsilon=0.0001)
+
+# Fitting the Model 
+model.fit_generator(train_generator,
+                    steps_per_epoch=train_generator.samples // BATCH_SIZE,
+                    epochs=100,
+                    validation_data=val_generator,
+                    validation_steps = val_generator.samples // BATCH_SIZE, 
+                    callbacks = [es, mc, rlr])
+
+## *Model performance obtained* -
+# **loss: 0.0057 - acc: 0.9982 - val_loss: 0.0212 - val_acc: 0.9948**
+
+# Making Predictions on the Test Data || **Data10**
+
+import pandas as pd
+import numpy as np
+
+actual_results = pd.read_csv('/content/drive/My Drive/Rubix/10.APTOS_BIN_TEST.zip (Unzipped Files)/APTOS_BIN_TEST/aptos_bin_test.csv')
+actual_results = actual_results.rename(columns = {'file' : 'id_code', 'cat' : 'diagnosis'})
+test_df = pd.DataFrame(actual_results.iloc[:, 0])
+
+# loading the saved model
+from keras.models import load_model
+
+model = load_model('/content/drive/My Drive/Data11.h5')
+
+# importing the Test Data 
+from keras.preprocessing.image import ImageDataGenerator
+test_datagen = ImageDataGenerator(rescale=1 / 128.)
+
+test_generator = test_datagen.flow_from_dataframe(dataframe=test_df,
+                                                  directory="/content/drive/My Drive/Rubix/10.APTOS_BIN_TEST.zip (Unzipped Files)/APTOS_BIN_TEST/test",
+                                                  x_col="id_code",  
+                                                  batch_size=BATCH_SIZE,
+                                                  shuffle=False,
+                                                  class_mode=None, 
+                                                  target_size=(IMG_WIDTH, IMG_HEIGHT))
+
+predictions=model.predict_generator(test_generator, steps = len(test_generator))
+
+# Predictions
+y_pred = predictions
+y_pred = y_pred > 0.9
+y_pred = np.where(y_pred==True, 1, y_pred)
+y_pred = np.where(y_pred==False, 0, y_pred)
+
+# Actual results
+y_true = np.array(actual_results.iloc[:, 1].values).reshape(-1, 1)
+print(y_true.shape)
+
+from sklearn.metrics import classification_report
+report = classification_report(y_true, y_pred)
+print(report)
