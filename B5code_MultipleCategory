@@ -1,0 +1,141 @@
+''' classifying DR into 5 categories depending on the severity of the disease '''
+
+IMG_WIDTH = 456
+IMG_HEIGHT = 456
+CHANNELS = 3
+INPUT_SHAPE = (IMG_WIDTH, IMG_HEIGHT, CHANNELS)
+BATCH_SIZE = 4
+
+data_path = '/content/drive/My Drive/1. aptos_black_bg_2000_downscaled.zip (Unzipped Files)/aptos_black_bg_2000_downscaled'
+
+# Creating the Training & validation Data
+from keras.preprocessing.image import ImageDataGenerator
+
+
+datagen = ImageDataGenerator(rotation_range=360,
+                             horizontal_flip=True,
+                             vertical_flip=True,
+                             validation_split = 0.15,
+                             rescale=1 / 128.)
+
+
+train_generator = datagen.flow_from_directory(data_path,
+                                              target_size = (IMG_WIDTH, IMG_HEIGHT),
+                                              batch_size = BATCH_SIZE,
+                                              class_mode = 'categorical',
+                                              subset = 'training', 
+                                              shuffle = True)
+                                                  
+
+val_generator = datagen.flow_from_directory(data_path,
+                                            target_size =(IMG_WIDTH, IMG_HEIGHT),
+                                            batch_size = BATCH_SIZE,
+                                            class_mode = 'categorical', 
+                                            subset = 'validation',
+                                            shuffle = False)
+
+# Defining the Model architecture
+from tensorflow.keras.applications import EfficientNetB5
+from keras.layers import GlobalAveragePooling2D, Dense, Dropout, LeakyReLU
+from keras.activations import elu
+from keras.optimizers import Adam
+from keras.models import Sequential
+
+model = Sequential()
+effnet = EfficientNetB5(weights='imagenet',
+                        include_top=False,
+                        input_shape=(IMG_WIDTH, IMG_HEIGHT, CHANNELS))
+
+model.add(effnet)
+model.add(Dropout(0.25))
+model.add(Dense(2048))
+model.add(LeakyReLU())
+model.add(Dense(1024))
+model.add(LeakyReLU())
+model.add(Dense(512))
+model.add(LeakyReLU())
+model.add(Dense(256))
+model.add(LeakyReLU())
+model.add(GlobalAveragePooling2D())
+model.add(Dropout(0.5))
+model.add(Dense(5, activation='softmax'))
+
+model.compile(loss='categorical_crossentropy',
+              optimizer=Adam(lr=0.00005), 
+              metrics=['acc'])
+
+
+# ModelSummary
+model.summary()
+
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+es = EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience=12)
+mc = ModelCheckpoint('/content/drive/My Drive/B5Tuned5_8K_FinalData1.h5', monitor='val_loss', save_best_only = True, verbose=1)
+rlr = ReduceLROnPlateau(monitor='val_loss', 
+                        factor=0.5, 
+                        patience=4, 
+                        verbose=1, 
+                        mode='auto', 
+                        epsilon=0.0001)
+
+# Fitting the Model 
+model.fit_generator(train_generator,
+                    steps_per_epoch=train_generator.samples // BATCH_SIZE,
+                    epochs=100,
+                    validation_data=val_generator,
+                    validation_steps = val_generator.samples // BATCH_SIZE, 
+                    callbacks = [es, mc, rlr])
+
+# **loss: 0.0640 - acc: 0.9783 - val_loss: 0.1619 - val_acc: 0.9515**
+
+# **Fine-Tuning**
+
+from keras.models import load_model
+
+model = load_model('/content/drive/My Drive/B5Tuned5_8K_FinalData1.h5')
+
+# Creating the Training & validation Data
+from keras.preprocessing.image import ImageDataGenerator
+
+
+datagen = ImageDataGenerator(rotation_range=360,
+                             horizontal_flip=True,
+                             vertical_flip=True,
+                             validation_split = 0.15,
+                             rescale=1 / 128.)
+
+
+train_generator = datagen.flow_from_directory(data_path,
+                                              target_size = (IMG_WIDTH, IMG_HEIGHT),
+                                              batch_size = BATCH_SIZE,
+                                              class_mode = 'categorical',
+                                              subset = 'training', 
+                                              shuffle = True)
+                                                  
+
+val_generator = datagen.flow_from_directory(data_path,
+                                            target_size =(IMG_WIDTH, IMG_HEIGHT),
+                                            batch_size = BATCH_SIZE,
+                                            class_mode = 'categorical', 
+                                            subset = 'validation',
+                                            shuffle = False)
+
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+es = EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience=10)
+mc = ModelCheckpoint('/content/drive/My Drive/FinalData1_fineTuned.h5', monitor='val_loss', save_best_only = True, verbose=1)
+rlr = ReduceLROnPlateau(monitor='val_loss', 
+                        factor=0.5, 
+                        patience=4, 
+                        verbose=1, 
+                        mode='auto', 
+                        epsilon=0.0001)
+
+# Fitting the Model 
+model.fit_generator(train_generator,
+                    steps_per_epoch=train_generator.samples // BATCH_SIZE,
+                    epochs=40,
+                    validation_data=val_generator,
+                    validation_steps = val_generator.samples // BATCH_SIZE, 
+                    callbacks = [es, mc, rlr])
+
+# **loss: 0.0377 - acc: 0.9849 - val_loss: 0.1299 - val_acc: 0.9589**
